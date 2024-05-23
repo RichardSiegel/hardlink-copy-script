@@ -1,0 +1,17 @@
+{
+  "name": "hardlink-copy-script",
+  "version": "1.0.0",
+  "description": "Keep all new hardlinks from a source directory safe in a target directory, where they will not be deleted if they are removed from the source dir.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["hardlink","inode","backup"],
+  "author": "Richard Siegel",
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^20.12.12",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
