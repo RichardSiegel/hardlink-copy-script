@@ -14,7 +14,19 @@ function existsAsHardlink(srcPath: string, destPath: string): boolean {
   return srcStats.ino === destStats.ino;
 }
 
-function createHardlinks(src: string, dest: string): void {
+type PathSignature = `inode=${number}:path="${string}"`;
+
+function getPathSignature(filePath: string): PathSignature {
+  const { ino } = fs.statSync(filePath);
+  return `inode=${ino}:path="${filePath}"`;
+}
+
+function createHardlinks(
+  src: string,
+  dest: string,
+  skipPaths: PathSignature[],
+  checkedPaths: PathSignature[]
+): void {
   const srcItems = fs.readdirSync(src, { withFileTypes: true });
 
   for (const srcItem of srcItems) {
@@ -23,8 +35,10 @@ function createHardlinks(src: string, dest: string): void {
 
     if (srcItem.isDirectory()) {
       ensureDirectoryExistence(destPath);
-      createHardlinks(srcPath, destPath);
+      createHardlinks(srcPath, destPath, skipPaths, checkedPaths);
     } else if (srcItem.isFile()) {
+      const pathSignature = getPathSignature(srcPath);
+      checkedPaths.push(pathSignature);
       let finalDestPath = destPath;
       let counter = 1;
 
@@ -37,11 +51,38 @@ function createHardlinks(src: string, dest: string): void {
         counter++;
       }
 
+      // if not the hardlink we could create already
       if (!existsAsHardlink(srcPath, finalDestPath)) {
-        fs.linkSync(srcPath, finalDestPath);
+        // if not removed after it was hardlinked before
+        if (!skipPaths.includes(pathSignature)) {
+          // New files will be hardlinked
+          fs.linkSync(srcPath, finalDestPath);
+        }
       }
     }
   }
+}
+
+const sourceDirStateFileName = ".last-synced-source-dir-state.json";
+
+function loadListOfKnownSourceFiles(targetDir: string): PathSignature[] {
+  const filename = path.join(targetDir, sourceDirStateFileName);
+  if (!fs.existsSync(filename)) return [] as PathSignature[];
+  const jsonString = fs.readFileSync(filename, "utf-8");
+  const sourceDirState = JSON.parse(jsonString);
+  return sourceDirState?.checkedPaths ?? ([] as PathSignature[]);
+}
+
+function saveListOfKnownSourceFiles(
+  targetDir: string,
+  checkedPaths: PathSignature[]
+) {
+  const filename = path.join(targetDir, sourceDirStateFileName);
+  const sourceDirState = {
+    scanDate: new Date().toISOString(),
+    checkedPaths,
+  };
+  fs.writeFileSync(filename, JSON.stringify(sourceDirState));
 }
 
 function main() {
@@ -61,8 +102,16 @@ function main() {
     process.exit(1);
   }
 
+  // use the list of files, which were synced already to skip them
+  // thus, if they got deleted in the target they will not be restored
+  const skipPaths = loadListOfKnownSourceFiles(targetDir);
+  const checkedPaths: PathSignature[] = [];
+
   ensureDirectoryExistence(targetDir);
-  createHardlinks(sourceDir, targetDir);
+  createHardlinks(sourceDir, targetDir, skipPaths, checkedPaths);
+
+  // save what got synced this time, to be able to skip it in the future
+  saveListOfKnownSourceFiles(targetDir, checkedPaths);
 
   console.log(
     `Directory tree replicated from ${sourceDir} to ${targetDir} using hardlinks.`
