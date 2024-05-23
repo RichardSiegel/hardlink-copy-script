@@ -7,6 +7,13 @@ function ensureDirectoryExistence(dirPath: string): void {
   fs.mkdirSync(dirPath);
 }
 
+function existsAsHardlink(srcPath: string, destPath: string): boolean {
+  if (!fs.existsSync(destPath)) return false;
+  const srcStats = fs.statSync(srcPath);
+  const destStats = fs.statSync(destPath);
+  return srcStats.ino === destStats.ino;
+}
+
 function createHardlinks(src: string, dest: string): void {
   const srcItems = fs.readdirSync(src, { withFileTypes: true });
 
@@ -18,9 +25,21 @@ function createHardlinks(src: string, dest: string): void {
       ensureDirectoryExistence(destPath);
       createHardlinks(srcPath, destPath);
     } else if (srcItem.isFile()) {
-      // TODO check not only if exists but also if hardlink
-      if (!fs.existsSync(destPath)) fs.linkSync(srcPath, destPath);
-      // TODO save number increment names
+      let finalDestPath = destPath;
+      let counter = 1;
+
+      while (
+        fs.existsSync(finalDestPath) &&
+        !existsAsHardlink(srcPath, finalDestPath)
+      ) {
+        const { name, ext } = path.parse(destPath);
+        finalDestPath = path.join(dest, `${name}(${counter})${ext}`);
+        counter++;
+      }
+
+      if (!existsAsHardlink(srcPath, finalDestPath)) {
+        fs.linkSync(srcPath, finalDestPath);
+      }
     }
   }
 }

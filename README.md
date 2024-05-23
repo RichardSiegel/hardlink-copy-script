@@ -18,7 +18,7 @@ npx ts-node src/index.ts /path/to/source /path/to/target
 
 Outcome should be:
 - [x] files are only added if now on source (not removed when missing on source)
-- [ ] when a hardlink is created save incremental names should be used if name is taken (if target inode != source inode)
+- [x] when a hardlink is created save incremental names should be used if name is taken (if target inode != source inode)
 - [ ] if something is deleted on target, it is not recreated from an unchanged source
 
 How-To:
